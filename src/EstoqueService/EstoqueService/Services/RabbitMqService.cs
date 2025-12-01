@@ -11,6 +11,7 @@ using EstoqueService.Services;
 
 namespace EstoqueService.Services
 {
+
     public class RabbitMqOptions
     {
         public string HostName { get; set; } = "localhost";
@@ -22,13 +23,14 @@ namespace EstoqueService.Services
         public string RoutingKey { get; set; } = "sale.confirmed";
     }
 
+
     public class RabbitMqService : IRabbitMqService, IDisposable
     {
         private readonly ILogger<RabbitMqService> _logger;
         private readonly RabbitMqOptions _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private IConnection? _connection;
-        private IModel? _channel;
+        private IChannel? _channel;
         private bool _disposed = false;
 
         public RabbitMqService(
@@ -50,23 +52,23 @@ namespace EstoqueService.Services
                     HostName = _options.HostName,
                     Port = _options.Port,
                     UserName = _options.UserName,
-                    Password = _options.Password,
-                    DispatchConsumersAsync = true
+                    Password = _options.Password
+                    // Removido DispatchConsumersAsync pois não existe na versão 7.x
                 };
 
-                _connection = factory.CreateConnection();
-                _channel = _connection.CreateModel();
+                _connection = await factory.CreateConnectionAsync();
+                _channel = await _connection.CreateChannelAsync();
 
                 // Declarar exchange e queue (idempotente)
-                _channel.ExchangeDeclare(_options.Exchange, ExchangeType.Topic, durable: true);
-                _channel.QueueDeclare(_options.QueueName, durable: true, exclusive: false, autoDelete: false);
-                _channel.QueueBind(_options.QueueName, _options.Exchange, _options.RoutingKey);
+                await _channel.ExchangeDeclareAsync(_options.Exchange, ExchangeType.Topic, durable: true);
+                await _channel.QueueDeclareAsync(_options.QueueName, durable: true, exclusive: false, autoDelete: false);
+                await _channel.QueueBindAsync(_options.QueueName, _options.Exchange, _options.RoutingKey);
 
                 // Configurar QoS para processar uma mensagem por vez
-                _channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
+                await _channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
 
                 var consumer = new AsyncEventingBasicConsumer(_channel);
-                consumer.Received += async (model, ea) =>
+                consumer.ReceivedAsync += async (model, ea) =>
                 {
                     var body = ea.Body.ToArray();
                     var message = Encoding.UTF8.GetString(body);
@@ -77,7 +79,7 @@ namespace EstoqueService.Services
                     try
                     {
                         await ProcessSaleConfirmedEvent(message);
-                        _channel.BasicAck(deliveryTag, multiple: false);
+                        await _channel.BasicAckAsync(deliveryTag, multiple: false);
                         _logger.LogInformation("Mensagem processada e confirmada: {DeliveryTag}", deliveryTag);
                     }
                     catch (Exception ex)
@@ -85,11 +87,11 @@ namespace EstoqueService.Services
                         _logger.LogError(ex, "Erro ao processar mensagem: {Message}", message);
 
                         // Rejeitar mensagem e enviar para DLQ (se configurado) ou descartar
-                        _channel.BasicNack(deliveryTag, multiple: false, requeue: false);
+                        await _channel.BasicNackAsync(deliveryTag, multiple: false, requeue: false);
                     }
                 };
 
-                _channel.BasicConsume(queue: _options.QueueName, autoAck: false, consumer: consumer);
+                await _channel.BasicConsumeAsync(queue: _options.QueueName, autoAck: false, consumer: consumer);
 
                 _logger.LogInformation("RabbitMQ Consumer iniciado. Queue: {Queue}", _options.QueueName);
 
@@ -185,7 +187,7 @@ namespace EstoqueService.Services
 
                         if (produto.Quantidade < item.Quantidade)
                         {
-                            var error = $"Estoque insuficiente para produto {item.ProdutoId}.  Disponível: {produto.Quantidade}, Solicitado: {item.Quantidade}";
+                            var error = $"Estoque insuficiente para produto {item.ProdutoId}. Disponível: {produto.Quantidade}, Solicitado: {item.Quantidade}";
                             errors.Add(error);
                             _logger.LogWarning(error);
                             continue;
@@ -221,7 +223,7 @@ namespace EstoqueService.Services
                     _logger.LogInformation("Evento processado com sucesso: OrderId {OrderId}, Itens: {ItemCount}",
                         saleEvent.OrderId, saleEvent.Items.Count);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     await transaction.RollbackAsync();
                     throw;
@@ -264,8 +266,9 @@ namespace EstoqueService.Services
         {
             try
             {
-                _channel?.Close();
-                _connection?.Close();
+                _channel?.CloseAsync().GetAwaiter().GetResult();
+                _connection?.CloseAsync().GetAwaiter().GetResult();
+
                 _logger.LogInformation("RabbitMQ Consumer parado");
             }
             catch (Exception ex)
@@ -285,4 +288,5 @@ namespace EstoqueService.Services
             }
         }
     }
+
 }

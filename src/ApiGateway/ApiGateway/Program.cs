@@ -41,7 +41,7 @@ builder.Services.AddSwaggerGen(c =>
     c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
     {
         {
-            new Microsoft.OpenApi. Models.OpenApiSecurityScheme
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
             {
                 Reference = new Microsoft.OpenApi.Models.OpenApiReference
                 {
@@ -55,7 +55,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // Authentication & Authorization
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "troque-essa-chave-por-uma-muito-secreta-! 123";
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "troque-essa-chave-por-uma-muito-secreta-!123";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ecommerce";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -81,20 +81,33 @@ builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
 /*
-builder.Services.AddRateLimiter(options =>
+// 🔧 NOVA CONFIGURAÇÃO: HttpClient para aceitar certificados SSL inválidos
+builder.Services.ConfigureHttpClientDefaults(http =>
+{
+    http.ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        return new HttpClientHandler()
+        {
+            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+        };
+    });
+});
+*/
+/*
+builder.Services. AddRateLimiter(options =>
 {
     options.AddFixedWindowLimiter("api", limiterOptions =>
     {
         limiterOptions.PermitLimit = 100;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        limiterOptions. Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueProcessingOrder = QueueProcessingOrder. OldestFirst;
         limiterOptions.QueueLimit = 10;
     });
 
-    options.OnRejected = async (context, token) =>
+    options. OnRejected = async (context, token) =>
     {
         context.HttpContext.Response.StatusCode = 429;
-        await context.HttpContext.Response.WriteAsync("Rate limit exceeded.  Try again later.", cancellationToken: token);
+        await context. HttpContext.Response. WriteAsync("Rate limit exceeded.  Try again later.", cancellationToken: token);
     };
 });
 */
@@ -137,16 +150,4 @@ app.UseAuthorization();
 //app.UseRateLimiter();
 
 // Controllers (Auth endpoints)
-//app.MapControllers().RequireRateLimiting("api");
-app.MapControllers();
-
-// Health checks
-app.MapHealthChecks("/health");
-
-// YARP Reverse Proxy
-app.MapReverseProxy();
-
-Console.WriteLine("API Gateway iniciado - Porta: 5000 (HTTP) e 5001 (HTTPS)");
-Console.WriteLine("Swagger disponível em: http://localhost:5000/swagger");
-
-app.Run();
+//app.MapControllers().RequireRat*

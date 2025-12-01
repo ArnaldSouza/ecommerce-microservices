@@ -45,7 +45,7 @@ builder.Services.AddHostedService<SaleConfirmedConsumer>();
 
 // Health Checks
 builder.Services.AddHealthChecks()
-    .AddDbContext<EstoqueDbContext>();
+    .AddDbContextCheck<EstoqueDbContext>();
 
 var app = builder.Build();
 
