@@ -33,3 +33,4 @@ C:\Users\Arnal\OneDrive\Desktop\Arnald\Development\DIO\Bootcamp Avanade - Back-e
 C:\Users\Arnal\OneDrive\Desktop\Arnald\Development\DIO\Bootcamp Avanade - Back-end com .NET e IA\ecommerce-microservices\src\ApiGateway\ApiGateway\obj\Debug\net8.0\ApiGateway.pdb
 C:\Users\Arnal\OneDrive\Desktop\Arnald\Development\DIO\Bootcamp Avanade - Back-end com .NET e IA\ecommerce-microservices\src\ApiGateway\ApiGateway\obj\Debug\net8.0\ApiGateway.genruntimeconfig.cache
 C:\Users\Arnal\OneDrive\Desktop\Arnald\Development\DIO\Bootcamp Avanade - Back-end com .NET e IA\ecommerce-microservices\src\ApiGateway\ApiGateway\obj\Debug\net8.0\ref\ApiGateway.dll
+C:\Users\Arnal\OneDrive\Desktop\Arnald\Development\DIO\Bootcamp Avanade - Back-end com .NET e IA\ecommerce-microservices\src\ApiGateway\ApiGateway\obj\Debug\net8.0\ApiGateway.sourcelink.json

@@ -1,5 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore. Mvc;
 using VendasService.Models.DTOs;
 using VendasService.Services;
 
@@ -19,16 +18,20 @@ namespace VendasService.Controllers
             _logger = logger;
         }
 
+        /// <summary>
+        /// Obter todos os pedidos
+        /// </summary>
         [HttpGet]
-        [Authorize]
         public async Task<IActionResult> GetAll()
         {
             var list = await _orderService.GetAllAsync();
             return Ok(list);
         }
 
+        /// <summary>
+        /// Obter pedido por ID
+        /// </summary>
         [HttpGet("{id:int}")]
-        [Authorize]
         public async Task<IActionResult> GetById(int id)
         {
             var p = await _orderService.GetByIdAsync(id);
@@ -36,8 +39,10 @@ namespace VendasService.Controllers
             return Ok(p);
         }
 
+        /// <summary>
+        /// Criar novo pedido
+        /// </summary>
         [HttpPost]
-        [Authorize]
         public async Task<IActionResult> Create([FromBody] PedidoCreateDto dto)
         {
             try

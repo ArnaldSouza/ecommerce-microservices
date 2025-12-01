@@ -1,0 +1,56 @@
+{
+    "rabbit_version": "3.12.0",
+    "rabbitmq_version": "3.12.0",
+    "users": [
+        {
+            "name": "admin",
+            "password_hash": "gOQ9O52mgKF1z4b8AdpJQPIhWYa8mFY4z7DhZG6lgCNkMNGU",
+            "hashing_algorithm": "rabbit_password_hashing_sha256",
+            "tags": "administrator"
+        }
+    ],
+    "vhosts": [
+        {
+            "name": "/"
+        }
+    ],
+    "permissions": [
+        {
+            "user": "admin",
+            "vhost": "/",
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*"
+        }
+    ],
+    "exchanges": [
+        {
+            "name": "ecommerce.events",
+            "vhost": "/",
+            "type": "topic",
+            "durable": true,
+            "auto_delete": false,
+            "internal": false,
+            "arguments": {}
+        }
+    ],
+    "queues": [
+        {
+            "name": "inventory.stock.update",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {}
+        }
+    ],
+    "bindings": [
+        {
+            "source": "ecommerce.events",
+            "vhost": "/",
+            "destination": "inventory.stock.update",
+            "destination_type": "queue",
+            "routing_key": "sale. confirmed",
+            "arguments": {}
+        }
+    ]
+}

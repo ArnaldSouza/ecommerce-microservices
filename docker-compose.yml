@@ -1,0 +1,148 @@
+services:
+  # SQL Server
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ecommerce-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=SqlServer2022! 
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ./docker/sql-server/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P SqlServer2022! -Q 'SELECT 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: ecommerce-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit log_levels [{connection,error},{default,info}]
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./docker/rabbitmq/definitions. json:/etc/rabbitmq/definitions.json:ro
+      - ./docker/rabbitmq/healthcheck.sh:/usr/local/bin/healthcheck.sh:ro
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "bash", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Estoque Service
+  estoque-service:
+    build:
+      context: . 
+      dockerfile: src/EstoqueService/EstoqueService/Dockerfile
+    container_name: ecommerce-estoque
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=EstoqueDB;User Id=sa;Password=SqlServer2022!;TrustServerCertificate=true;
+    ports:
+      - "5002:80"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: on-failure
+
+  # Vendas Service
+  vendas-service:
+    build:
+      context: .
+      dockerfile: src/VendasService/VendasService/Dockerfile
+    container_name: ecommerce-vendas
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=VendasDB;User Id=sa;Password=SqlServer2022!;TrustServerCertificate=true;
+      - Inventory__BaseUrl=http://estoque-service:80
+      - RabbitMq__HostName=rabbitmq
+      - RabbitMq__Port=5672
+      - RabbitMq__UserName=admin
+      - RabbitMq__Password=admin123
+      - RabbitMq__Exchange=ecommerce. events
+      - Jwt__Key=troque-essa-chave-por-uma-muito-secreta-!123
+      - Jwt__Issuer=ecommerce
+    ports:
+      - "5004:80"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      estoque-service:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: on-failure
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/ApiGateway/Dockerfile
+    container_name: ecommerce-gateway
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Services__EstoqueService=http://estoque-service:80
+      - Services__VendasService=http://vendas-service:80
+      - Jwt__Key=troque-essa-chave-por-uma-muito-secreta-!123
+      - Jwt__Issuer=ecommerce
+    ports:
+      - "5000:80"
+    depends_on:
+      estoque-service:
+        condition: service_healthy
+      vendas-service:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: on-failure
+
+volumes:
+  sqlserver_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  ecommerce-network:
+    driver: bridge
