@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,13 +22,13 @@ namespace VendasService.BackgroundWorkers
     public class OutboxPublisherService : BackgroundService
     {
         private readonly ILogger<OutboxPublisherService> _logger;
-        private readonly IOrderRepository _repo;
+        private readonly IServiceProvider _serviceProvider;
         private readonly RabbitMqOptions _options;
 
-        public OutboxPublisherService(ILogger<OutboxPublisherService> logger, IOrderRepository repo, IOptions<RabbitMqOptions> options)
+        public OutboxPublisherService(ILogger<OutboxPublisherService> logger, IServiceProvider serviceProvider, IOptions<RabbitMqOptions> options)
         {
             _logger = logger;
-            _repo = repo;
+            _serviceProvider = serviceProvider;
             _options = options.Value;
         }
 
@@ -53,23 +54,27 @@ namespace VendasService.BackgroundWorkers
             {
                 try
                 {
-                    var pendentes = await _repo.GetPendingOutboxAsync(50);
-                    foreach (var msg in pendentes)
+                    using (var scope = _serviceProvider.CreateScope())
                     {
-                        var routingKey = msg.EventType; // Venda Confirmada
-                        var body = Encoding.UTF8.GetBytes(msg.Payload);
+                        var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+                        var pendentes = await repo.GetPendingOutboxAsync(50);
+                        foreach (var msg in pendentes)
+                        {
+                            var routingKey = msg.EventType; // Venda Confirmada
+                            var body = Encoding.UTF8.GetBytes(msg.Payload);
 
-                        var props = channel.CreateBasicProperties();
-                        props.Persistent = true;
-                        props.MessageId = msg.Id.ToString();
+                            var props = channel.CreateBasicProperties();
+                            props.Persistent = true;
+                            props.MessageId = msg.Id.ToString();
 
-                        channel.BasicPublish(exchange: _options.Exchange,
-                                             routingKey: routingKey,
-                                             basicProperties: props,
-                                             body: body);
+                            channel.BasicPublish(exchange: _options.Exchange,
+                                                 routingKey: routingKey,
+                                                 basicProperties: props,
+                                                 body: body);
 
-                        await _repo.MarkOutboxSentAsync(msg.Id);
-                        _logger.LogInformation("Publicada mensagem outbox {OutboxId} com routingKey {RoutingKey}", msg.Id, routingKey);
+                            await repo.MarkOutboxSentAsync(msg.Id);
+                            _logger.LogInformation("Publicada mensagem outbox {OutboxId} com routingKey {RoutingKey}", msg.Id, routingKey);
+                        }
                     }
                 }
                 catch (Exception ex)
