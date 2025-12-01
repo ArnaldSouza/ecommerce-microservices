@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using EstoqueService.Data;
 using EstoqueService.Repositories;
 using EstoqueService.Services;
+using EstoqueService.BackgroundServices;
 using Serilog;
 
 // Configurar Serilog
@@ -14,16 +15,16 @@ var builder = WebApplication.CreateBuilder(args);
 // Serilog
 builder.Host.UseSerilog();
 
-// Adiconar services ao container. 
+// Add services to the container. 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new()
     {
-        Title = "API Gerenciamento de Estoque",
+        Title = "Estoque Service API",
         Version = "v1",
-        Description = "API para gerenciamento de estoque de produtos"
+        Description = "API para gerenciamento de estoque de produtos com consumer RabbitMQ"
     });
 });
 
@@ -31,17 +32,24 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<EstoqueDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Injeção de dependência
+// Dependency Injection
 builder.Services.AddScoped<IProdutoRepository, ProdutoRepository>();
 builder.Services.AddScoped<IProdutoService, ProdutoService>();
 
+// RabbitMQ Configuration
+builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMq"));
+builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
+
+// Background Services
+builder.Services.AddHostedService<SaleConfirmedConsumer>();
+
 // Health Checks
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<EstoqueDbContext>();
+    .AddDbContext<EstoqueDbContext>();
 
 var app = builder.Build();
 
-// Configura o pipeline HTTP da requisição
+// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -55,13 +63,25 @@ app.MapControllers();
 // Health checks endpoint
 app.MapHealthChecks("/health");
 
-// Migração de banco de dados na inicialização
+// Database migration on startup
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<EstoqueDbContext>();
-    context.Database.EnsureCreated();
+
+    try
+    {
+        // Aplicar migrações pendentes
+        context.Database.Migrate();
+        Console.WriteLine("✅ Migrações aplicadas com sucesso");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Erro ao aplicar migrações: {ex.Message}");
+        // Em produção, considere falhar a aplicação se as migrações falharem
+    }
 }
 
 Console.WriteLine("Estoque Service iniciado - Portas: 5002 (HTTP) e 5003 (HTTPS)");
+Console.WriteLine("RabbitMQ Consumer ativo para eventos sale.confirmed");
 
 app.Run();
