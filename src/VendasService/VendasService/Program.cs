@@ -1,13 +1,40 @@
+using Microsoft.EntityFrameworkCore;
+using VendasService.Data;
+using Serilog;
+
+// Configurar Serilog
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateLogger();
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+// Serilog
+builder.Host.UseSerilog();
+
+// Adicionar services ao container
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new()
+    {
+        Title = "API Gerenciamento de Vendas",
+        Version = "v1",
+        Description = "API para gerenciamento de pedidos e vendas"
+    });
+});
+
+// Entity Framework
+builder.Services.AddDbContext<VendasDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Health checks básico
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configurar o pipeline HTTP da requisição
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -15,30 +42,19 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// Health checks endpoint
+app.MapHealthChecks("/health");
 
-app.MapGet("/weatherforecast", () =>
+// Migração de banco de dados na inicialização
+using (var scope = app.Services.CreateScope())
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+    var context = scope.ServiceProvider.GetRequiredService<VendasDbContext>();
+    context.Database.EnsureCreated();
+}
+
+Console.WriteLine("Vendas Service iniciado - Portas: 5004 (HTTP) e 5005 (HTTPS)");
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
