@@ -38,6 +38,10 @@ builder.Services.AddHttpClient("inventory", client =>
 {
     var baseUrl = configuration["Inventory:BaseUrl"] ?? "http://localhost:5002";
     client.BaseAddress = new Uri(baseUrl);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
+{
+    ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
 });
 
 // RabbitMQ options

@@ -34,19 +34,24 @@ namespace VendasService.Services
 
             foreach (var item in dto.Items)
             {
-                // chama: GET /api/produtos/{id}/estoque/{quantidade}
-                var url = $"/api/produtos/{item.ProdutoId}/estoque/{item.Quantidade}";
-                var resp = await client.GetAsync(url);
+                var resp = await client.GetAsync($"/api/produtos/{item.ProdutoId}");
                 if (!resp.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("Falha ao consultar estoque do produto {ProdutoId}. Status: {Status}", item.ProdutoId, resp.StatusCode);
-                    throw new InvalidOperationException($"Falha ao consultar estoque do produto {item.ProdutoId}");
+                    _logger.LogWarning("Produto {ProdutoId} não encontrado.  Status: {Status}", item.ProdutoId, resp.StatusCode);
+                    throw new InvalidOperationException($"Produto {item.ProdutoId} não encontrado");
                 }
 
                 var json = await resp.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(json);
-                var temEstoque = doc.RootElement.GetProperty("TemEstoque").GetBoolean();
-                if (!temEstoque) insuficientes.Add(item.ProdutoId);
+
+                // Verificar se produto está ativo e tem estoque suficiente
+                var quantidadeDisponivel = doc.RootElement.GetProperty("quantidade").GetInt32();
+                var ativo = doc.RootElement.GetProperty("ativo").GetBoolean();
+
+                if (!ativo || quantidadeDisponivel < item.Quantidade)
+                {
+                    insuficientes.Add(item.ProdutoId);
+                }
             }
 
             if (insuficientes.Any())
@@ -68,7 +73,7 @@ namespace VendasService.Services
                 if (!resp.IsSuccessStatusCode) throw new InvalidOperationException($"Não foi possível obter dados do produto {item.ProdutoId}");
                 var prodJson = await resp.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(prodJson);
-                var preco = doc.RootElement.GetProperty("Preco").GetDecimal();
+                var preco = doc.RootElement.GetProperty("preco").GetDecimal();
 
                 var pedidoItem = new PedidoItem
                 {
